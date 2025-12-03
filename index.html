@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Todo — Harsha Vardhan</title>
+  <style>
+:root{
+  --bg:#0f1724; --card:#111827; --accent:#2196F3; --muted:#9aa4bf; --glass: rgba(255,255,255,0.03);
+  --radius:12px;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  font-family: Inter, "Segoe UI", system-ui, Roboto, sans-serif;
+  margin:0; background:linear-gradient(180deg,#071028 0%, #0f1724 100%);
+  color:#e6eef8; display:flex; align-items:center; justify-content:center; padding:32px;
+}
+.container{width:100%;max-width:820px}
+header{margin-bottom:18px;text-align:center}
+h1{font-size:2rem;margin:0}
+.sub{color:var(--muted);margin-top:6px;font-size:0.95rem}
+
+.todo-app{
+  background:var(--card); border-radius:var(--radius); padding:20px; box-shadow:0 8px 30px rgba(2,6,23,0.6);
+  border:1px solid rgba(255,255,255,0.03);
+}
+#todo-form{display:flex;gap:10px;margin-bottom:14px}
+#todo-form input{
+  flex:1;padding:12px 14px;border-radius:10px;border:none;background:var(--glass);color:inherit;font-size:1rem;
+  outline: none;
+}
+.btn{
+  background:linear-gradient(135deg,var(--accent),#1976D2);
+  color:white;border:none;padding:10px 14px;border-radius:10px;font-weight:600;cursor:pointer;
+}
+.controls{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:12px}
+.filters{display:flex;gap:8px}
+.filter{background:transparent;border:none;color:var(--muted);padding:6px 10px;border-radius:8px;cursor:pointer}
+.filter.active{color:var(--accent);background:rgba(33,150,243,0.06);font-weight:600}
+.actions{display:flex;gap:8px;align-items:center}
+.small{background:transparent;border:1px solid rgba(255,255,255,0.04);padding:6px 10px;border-radius:8px;color:var(--muted);cursor:pointer}
+.upload-label{display:inline-flex;align-items:center;gap:6px;cursor:pointer}
+
+.todo-list{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:8px}
+.todo-item{
+  display:flex;align-items:center;gap:12px;padding:12px;border-radius:10px;background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.00));
+  border:1px solid rgba(255,255,255,0.02);
+}
+.todo-item .left{display:flex;align-items:center;gap:12px;flex:1}
+.checkbox{width:18px;height:18px;border-radius:4px;border:2px solid rgba(255,255,255,0.06);display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
+.checkbox.checked{background:linear-gradient(135deg,var(--accent),#1976D2);border:none;color:white;font-size:12px}
+.task-text{font-size:1rem;color:inherit;max-width:100%}
+.task-text.completed{opacity:0.5;text-decoration:line-through;color:var(--muted)}
+.actions-right{display:flex;gap:8px}
+.icon-btn{background:transparent;border:none;color:var(--muted);cursor:pointer;padding:6px;border-radius:8px}
+.icon-btn:hover{color:var(--accent);background:rgba(33,150,243,0.03)}
+
+.empty{color:var(--muted);text-align:center;padding:18px;margin-top:10px;border-radius:10px;border:1px dashed rgba(255,255,255,0.02)}
+.foot{text-align:center;margin-top:16px;color:var(--muted)}
+a{color:var(--accent)}
+@media (max-width:520px){body{padding:18px}.controls{flex-direction:column;align-items:stretch}}
+  </style>
+</head>
+<body>
+  <main class="container">
+    <header>
+      <h1>Todo List</h1>
+      <p class="sub">Simple, fast & offline — saves to your browser</p>
+    </header>
+
+    <section class="todo-app">
+      <form id="todo-form" aria-label="Add todo">
+        <input id="todo-input" placeholder="Add a new task..." autocomplete="off" />
+        <button type="submit" class="btn">Add</button>
+      </form>
+
+      <div class="controls">
+        <div class="filters">
+          <button data-filter="all" class="filter active">All</button>
+          <button data-filter="active" class="filter">Active</button>
+          <button data-filter="completed" class="filter">Completed</button>
+        </div>
+        <div class="actions">
+          <button id="clear-completed" class="small">Clear completed</button>
+          <button id="export-json" class="small">Export</button>
+          <label class="small upload-label">
+            Import
+            <input id="import-file" type="file" accept="application/json" hidden/>
+          </label>
+        </div>
+      </div>
+
+      <ul id="todo-list" class="todo-list" aria-live="polite"></ul>
+
+      <div id="empty" class="empty">No tasks yet — add your first task!</div>
+    </section>
+
+    <footer class="foot">
+      <small>Built by Harsha Vardhan • <a href="https://github.com/yourusername/your-repo" target="_blank" rel="noopener">Source</a></small>
+    </footer>
+  </main>
+
+  <script>
+// Simple todo app with localStorage, filters, import/export, edit, delete.
+const STORAGE_KEY = 'harsha_todo_v1';
+let todos = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+let filter = 'all';
+
+const $ = sel => document.querySelector(sel);
+const $$ = sel => document.querySelectorAll(sel);
+
+const listEl = $('#todo-list');
+const form = $('#todo-form');
+const input = $('#todo-input');
+const emptyEl = $('#empty');
+
+function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(todos)); render(); }
+
+function createTodo(text){
+  return { id: Date.now().toString(), text: text.trim(), done: false };
+}
+
+function addTodo(text){
+  if (!text || !text.trim()) return;
+  todos.unshift(createTodo(text));
+  input.value = '';
+  save();
+}
+
+function toggleDone(id){
+  todos = todos.map(t => t.id === id ? {...t, done: !t.done} : t);
+  save();
+}
+
+function deleteTodo(id){
+  todos = todos.filter(t => t.id !== id);
+  save();
+}
+
+function editTodo(id, newText){
+  todos = todos.map(t => t.id === id ? {...t, text: newText.trim()} : t);
+  save();
+}
+
+function clearCompleted(){
+  todos = todos.filter(t => !t.done);
+  save();
+}
+
+function setFilter(f){
+  filter = f;
+  $$('.filter').forEach(btn => btn.classList.toggle('active', btn.dataset.filter === f));
+  render();
+}
+
+function filteredTodos(){
+  if (filter === 'active') return todos.filter(t => !t.done);
+  if (filter === 'completed') return todos.filter(t => t.done);
+  return todos;
+}
+
+function render(){
+  listEl.innerHTML = '';
+  const items = filteredTodos();
+  if (!todos.length) {
+    emptyEl.style.display = 'block';
+  } else {
+    emptyEl.style.display = items.length ? 'none' : 'block';
+  }
+
+  items.forEach(t => {
+    const li = document.createElement('li');
+    li.className = 'todo-item';
+    li.innerHTML = `
+      <div class="left">
+        <button class="checkbox ${t.done ? 'checked' : ''}" aria-label="Mark done">${t.done ? '✓' : ''}</button>
+        <div class="task-text ${t.done ? 'completed' : ''}">${escapeHtml(t.text)}</div>
+      </div>
+      <div class="actions-right">
+        <button class="icon-btn edit">✎</button>
+        <button class="icon-btn delete">🗑</button>
+      </div>
+    `;
+    // handlers
+    li.querySelector('.checkbox').addEventListener('click', () => toggleDone(t.id));
+    li.querySelector('.delete').addEventListener('click', () => {
+      if (confirm('Delete this task?')) deleteTodo(t.id);
+    });
+    li.querySelector('.edit').addEventListener('click', () => {
+      const newText = prompt('Edit task', t.text);
+      if (newText !== null) editTodo(t.id, newText);
+    });
+    listEl.appendChild(li);
+  });
+}
+
+function escapeHtml(s){ return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+// Events
+form.addEventListener('submit', e => { e.preventDefault(); addTodo(input.value); });
+$$('.filter').forEach(btn => btn.addEventListener('click', () => setFilter(btn.dataset.filter)));
+$('#clear-completed').addEventListener('click', () => { clearCompleted(); });
+$('#export-json').addEventListener('click', () => {
+  const data = JSON.stringify(todos, null, 2);
+  const blob = new Blob([data], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'harsha-todos.json'; document.body.appendChild(a); a.click();
+  a.remove(); URL.revokeObjectURL(url);
+});
+$('#import-file').addEventListener('change', function(){
+  const file = this.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const imported = JSON.parse(reader.result);
+      if (!Array.isArray(imported)) throw new Error('Invalid file');
+      // basic validation and merge
+      const valid = imported.filter(i => i && i.text).map(i => ({ id: i.id || Date.now()+Math.random(), text: String(i.text), done: !!i.done }));
+      todos = [...valid, ...todos];
+      save(); alert('Imported ' + valid.length + ' tasks.');
+    } catch(err) { alert('Import failed: ' + err.message); }
+  };
+  reader.readAsText(file);
+  this.value = '';
+});
+
+// initial render
+render();
+  </script>
+</body>
+</html>
